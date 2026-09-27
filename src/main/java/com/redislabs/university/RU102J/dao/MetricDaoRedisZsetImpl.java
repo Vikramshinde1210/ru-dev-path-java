@@ -46,12 +46,22 @@ public class MetricDaoRedisZsetImpl implements MetricDao {
     }
 
     // Challenge #2
+    // key naming pattern - metrics:wHg:2020-01-01:1
+    // prefix:metrics:day:siteId
+    // value - measurement:minute
     private void insertMetric(Jedis jedis, long siteId, double value, MetricUnit unit,
                               ZonedDateTime dateTime) {
-        // START Challenge #2
         String metricKey = RedisSchema.getDayMetricKey(siteId, unit, dateTime);
         Integer minuteOfDay = getMinuteOfDay(dateTime);
-        // END Challenge #2
+
+        // Sorted set member: measurement:minute
+        String zSetValue = new MeasurementMinute(value, minuteOfDay).toString();
+
+        // Score = minute of the day, so measurements are ordered chronologically
+        jedis.zadd(metricKey, minuteOfDay, zSetValue);
+
+        // Expire the entire day's sorted set after the retention period.
+        jedis.expire(metricKey, METRIC_EXPIRATION_SECONDS);
     }
 
     /**

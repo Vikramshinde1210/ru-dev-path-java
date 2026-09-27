@@ -38,9 +38,12 @@ public class HelloTest {
         String value = jedis.get("hello");
         assertThat(value, is("world"));
 
-        jedis.close();
+        jedis.close(); // close underline tcp socket for long-running program to prevent connection leak
     }
 
+    // jedis instances are not thread safe
+    // for multithreaded environment
+    // for e.g. jetty - java web servers hence we need thread safety
     @Test
     public void sayHelloThreadSafe() {
         JedisPool jedisPool;
@@ -55,6 +58,7 @@ public class HelloTest {
                 HostPort.getRedisHost(), HostPort.getRedisPort());
         }
 
+        // this gives jedis instance, try-with-resources resource is returned to pool after execution
         try (Jedis jedis = jedisPool.getResource()) {
             String result = jedis.set("hello", "world");
             assertThat(result, is("OK"));
