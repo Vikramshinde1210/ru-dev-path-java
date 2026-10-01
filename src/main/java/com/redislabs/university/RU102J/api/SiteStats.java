@@ -15,7 +15,7 @@ public class SiteStats {
     /* These field names will be used by multiple classes, so we define
        them here to abide by DRY (don't repeat yourself). */
     public final static String reportingTimeField = "lastReportingTime";
-    public final static String countField = "meterReadingCount";
+    public final static String countField = "meterReadingCount"; // per day
     public final static String maxWhField = "maxWhGenerated";
     public final static String minWhField = "minWhGenerated";
     public final static String maxCapacityField = "maxCapacity";

@@ -47,7 +47,7 @@ public class SiteStatsDaoRedisImpl implements SiteStatsDao {
             ZonedDateTime day = reading.getDateTime();
             String key = RedisSchema.getSiteStatsKey(siteId, day);
 
-            updateBasic(jedis, key, reading);
+            updateOptimized(jedis, key, reading);
         }
     }
 
@@ -57,7 +57,7 @@ public class SiteStatsDaoRedisImpl implements SiteStatsDao {
         String reportingTime = ZonedDateTime.now(ZoneOffset.UTC).toString();
         jedis.hset(key, SiteStats.reportingTimeField, reportingTime);
         jedis.hincrBy(key, SiteStats.countField, 1);
-        jedis.expire(key, weekSeconds);
+        jedis.expire(key, weekSeconds); // only keeping one week of site stats at any point in time
 
         String maxWh = jedis.hget(key, SiteStats.maxWhField);
         if (maxWh == null || reading.getWhGenerated() > Double.valueOf(maxWh)) {
@@ -79,9 +79,43 @@ public class SiteStatsDaoRedisImpl implements SiteStatsDao {
     }
 
     // Challenge #3
+    // Transaction = atomic batch of commands.
+    // Lua = atomic server-side logic.
     private void updateOptimized(Jedis jedis, String key, MeterReading reading) {
-        // START Challenge #3
-        // END Challenge #3
+
+        try(Transaction transaction = jedis.multi();){
+            String reportingTime = ZonedDateTime.now(ZoneOffset.UTC).toString();
+
+            // These operations don't depend on the current value,
+            // so they can directly be queued in the transaction.
+            transaction.hset(key, SiteStats.reportingTimeField, reportingTime);
+            transaction.hincrBy(key, SiteStats.countField, 1);
+            transaction.expire(key, weekSeconds);
+
+            // Compare-and-update operations are delegated to Lua
+            compareAndUpdateScript.updateIfGreater(
+                    transaction,
+                    key,
+                    SiteStats.maxWhField,
+                    reading.getWhGenerated()
+            );
+
+            compareAndUpdateScript.updateIfLess(
+                    transaction,
+                    key,
+                    SiteStats.minWhField,
+                    reading.getWhGenerated()
+            );
+
+            compareAndUpdateScript.updateIfGreater(
+                    transaction,
+                    key,
+                    SiteStats.maxCapacityField,
+                    getCurrentCapacity(reading)
+            );
+
+            transaction.exec();
+        }
     }
 
     private Double getCurrentCapacity(MeterReading reading) {

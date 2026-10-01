@@ -21,6 +21,8 @@ public class SiteDaoRedisImpl implements SiteDao {
             String hashKey = RedisSchema.getSiteHashKey(site.getId()); // sites:info:4
             String siteIdKey = RedisSchema.getSiteIDsKey(); // sites:ids
             jedis.hmset(hashKey, site.toMap());
+            // Redis can accept other commands between these two commands
+            // But not if these are executed within a transaction.
             jedis.sadd(siteIdKey, hashKey); // set containing all the site ids
         }
     }
